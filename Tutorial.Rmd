@@ -1,0 +1,997 @@
+---
+title: "Tutorial - TASK 2: ABI Project"
+author: "Nuno Simões, Vanessa Silva"
+date: "November 28, 2018"
+output: html_document
+---
+<br /> 
+
+This tutorial follows the **data exploratory analysis** and **predictive analysis** of a data set on absenteeism at work in brasilian courier company.
+
+We intend to analyze the data collected with a view to two objectives. 
+The  first  is  related  to  the basic  statistical  analysis  of  the  data,  where  we  obtained  summarization  and visualization of the attributes of data, correlations between different attributes and frequencies of one or more joined attributes.
+The second objective is related to the prediction of absenteeism at work, where we initially looked at the problemas  a  regression  problem,  once  we  predict  absenteeism  time  in  hours  (numeric attribute),  and  then  as  a  classification  problem,  where  we  divide the range of absenteeism time in five classes of absence. 
+For this we go test some prediction models and carry out transformations/selections of set of attributes in order to try to improve this predictive analysis.
+
+
+**The Data: Description**
+
+The working dataset is present at: [UCI Machine Learning Repository: Absenteeism at work Data Set](https://archive.ics.uci.edu/ml/datasets/Absenteeism+at+work). The dataset is related to a brasilian courier company. 
+
+One of the characteristics is that these data were collected from *July 2007* to *July 2010*, so the range of values turns out to be comprehensive. 
+
+This data set does not contain missing values and has **740** instances/observation and **21** attributes/variables.
+
+**Attribute Information**
+
+1. *ID* - Individual identification of each employee
+2. *Reason for absence* - Absences attested by the International Code of Diseases (ICD) stratified into **21** categories and **7** categories without (ICD)
+3. *Month of absence* - **13** months, from *July 2007* to *July 2010*
+4. *Day of the week* - Monday (**2**), Tuesday (**3**), Wednesday (**4**), Thursday (**5**), Friday (**6**)
+5. *Seasons* - Summer (**1**), Autumn (**2**), Winter (**3**), Spring (**4**)
+6. *Transportation expense*
+7. *Distance from residence to work* - In kilometers
+8. *Service time*
+9. *Age* - Age of employees
+10. *Work load average/day*
+11. *Hit target*
+12. *Disciplinary failure* - yes = **1**; no = **0**
+13. *Education* - High School (**1**), Graduate (**2**), Postgraduate (**3**), Master and Doctor (**4**)
+14. *Son* - Number of children
+15. *Social drinker* - If the employee drinks (yes = **1**; no = **0**)
+16. *Social smoker* - If the employee smokes (yes = **1**; no = **0**)
+17. *Pet* - Number of pets
+18. *Weight* - Employee weight (in kilogram)
+19. *Height* - Employee height (in centimeters)
+20. *Body mass index*
+21. *Absenteeism time in hours* - **Target Attribute**
+
+
+#Data import and clean-up
+
+First of all we will install (if they are not already installed) and load the necessary packages.
+
+Install the necessary packages:
+```{r, eval=FALSE, message=FALSE, warning=FALSE, results='hide'}
+install.packages("gridExtra")
+install.packages("corrplot")
+install.packages("ggplot2")
+install.packages("WVPlots")
+install.packages("cowplot")
+install.packages("rminer")
+install.packages("dplyr")
+```
+
+Load the necessary packages:
+```{r, results='hide', message=FALSE, warning=FALSE}
+library(gridExtra)
+library(corrplot)
+library(ggplot2)
+library(WVPlots)
+library(cowplot)
+library(rminer)
+library(dplyr)
+```
+
+
+###Setting the working directory
+
+Download the file "**Absenteeism_at_work.csv**" to the directory where you are going to work. Alternatively, if you want to change the current directory, do:
+```{r, eval=FALSE}
+setwd(dir)
+```
+
+And to view the current directory:
+```{r, eval=FALSE}
+getwd()
+```
+
+
+###Import the data
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+
+# Reading the file "Absenteeism_at_work.csv"
+fc <- "Data/Absenteeism_at_work.csv" 
+dat <- read.csv(fc, header = TRUE, sep = ";")
+
+```
+
+
+##Data clean-up and/or pre-processing steps necessary
+
+First we will see basic information as dimension of data, names of  attributes, structure of data and a set of examples of observations.
+```{r, message=FALSE, warning=FALSE}
+
+# Dimension of data
+dim(dat)
+
+# Names of attributes
+names(dat)
+
+# Structure of data
+str(dat)
+
+# Example of observations
+head(dat)
+
+```
+The dataset consists of integer and real attributes. Some integer attributes correspond to indices that map categorical attributes such as: *Reason.for.absence*, *Month.of.absence*, *Day.of.the.week*, *Seasons*, *Education*, *Social.drinker* and *Social.smoker*.
+
+Now we will check for abnormal values.
+```{r, message=FALSE, warning=FALSE, results='hide'}
+# Check for abnormal values
+sort(unique(dat$ID))
+sort(unique(dat$Reason.for.absence))
+sort(unique(dat$Day.of.the.week))
+sort(unique(dat$Seasons))
+sort(unique(dat$Distance.from.Residence.to.Work))
+sort(unique(dat$Service.time))
+sort(unique(dat$Age))
+sort(unique(dat$Work.load.Average.day))
+sort(unique(dat$Hit.target))
+sort(unique(dat$Education))
+sort(unique(dat$Son))
+sort(unique(dat$Social.drinker))
+sort(unique(dat$Social.smoker))
+sort(unique(dat$Pet))
+sort(unique(dat$Weight))
+sort(unique(dat$Height))
+sort(unique(dat$Body.mass.index))
+sort(unique(dat$Absenteeism.time.in.hours))
+
+```
+
+```{r, message=FALSE, warning=FALSE}
+
+sort(unique(dat$Month.of.absence))
+
+dat[dat$Month.of.absence == 0, ]
+nrow(dat[dat$Month.of.absence == 0, ])    # luckily, there are not many invalid instances.
+
+dat <- dat[dat$Month.of.absence != 0, ]
+
+```
+We verified that the attribute *Month.of.absence* has 13 values when they should be 12. 
+The anomalous value refers to the value **0** corresponding to the month of absence of the last three observations.
+To solve of this anomaly, we decided to remove the corresponding observations.
+
+We will also check for attributes that contain redundant information, that is, with more than 90% of the objects.
+```{r, message=FALSE, warning=FALSE}
+
+freq_atr <- c()
+for(i in 1:ncol(dat)){
+  freq_atr[i] <- max(table(dat[, i]))/nrow(dat)
+}
+
+freq_atr <- round(freq_atr, 2)
+ia <- which(freq_atr >= 0.9)
+print(ia)
+dat <- dat[, -ia]
+
+```
+We checked that there are 2 attributes in this situation (*Disciplinary.failure* and *Social.smoker*) and decided to remove the corresponding columns.
+
+
+#Data Exploratory Analysis
+
+First of all, we will add the names of the attributes relative to categorical variables.
+```{r}
+
+labels_Reasons <- c("0" = "Infectious and Parasitic", "1" = "Neoplasms", 
+                    "2" = "Blood and Immune Mechanism", "3" = "Endocrine, Nutritional and Metabolic", 
+                    "4" = "Mental and Behavioural", "5" = "Nervous System", 
+                    "6" = "Eye and Adnexa", "7" = "Ear and Mastoid Process", 
+                    "8" = "Circulatory System", "9" = "Respiratory System", 
+                    "10" = "Digestive System", "11" = "Skin and Subcutaneous Tissue", 
+                    "12" = "Musculoskeletal System and Connective Tissue", 
+                    "13" = "Genitourinary System", "14" = "Pregnancy, Childbirth and Puerperium", 
+                    "15" = "Perinatal Period", "16" = "Congenital and Chromosomal Malformations", 
+                    "17" = "Clinical and Laboratory Findings", 
+                    "18" = "Injury, Poisoning and other Consequences", 
+                    "19" = "Ext. causes of Morbidity and Mortality", 
+                    "21" = "Health Status and Health Services", "22" = "Patient Follow-up", 
+                    "23" = "Medical Consultation", "24" = "Blood Donation", 
+                    "25" = "Laboratory Examination", "26" = "Unjustified Absence", 
+                    "27" = "Physiotherapy", "28" = "Dental Consultation")
+
+labels_Months <- c("1" = "Jan", "2" = "Feb", "3" = "Mar",
+                   "4" = "Apr", "5" = "May", "6" = "Jun",
+                   "7" = "Jul", "8" = "Aug", "9" = "Sep",
+                   "10" = "Oct", "11" = "Nov", "12" = "Dec")
+
+labels_DayW <- c("2" = "Monday", "3" = "Tuesday", 
+                 "4" = "Wednesday", "5" = "Thursday", 
+                 "6" = "Friday")
+
+labels_Seasons <- c("1" = "Summer", "2" = "Autumn", 
+                    "3" = "Winter", "4" = "Spring")
+
+labels_Educ <- c("1" = "Highschool", "2" = "Graduate", 
+                 "3" = "Postgraduate", "4" = "Master and Doctrate")
+
+labels_Son <- c("0" = "Son = 0", "1" = "Son = 1", "2" = "Son = 2", 
+                "3" = "Son = 3",  "4" = "Son = 4")
+
+```
+
+Let's start by briefly reviewing the data obtained. Data **summarization** and **visualization** in ways that will be useful to the the company's managers.
+```{r}
+
+# Distribution of every numeric variable
+summary(dat)
+
+```
+Here, we can see, for example, that mean time of absence is **6.95** hours, minimum and maximum absence time is **0** and **120** hours, respectively, and 75% of the absences are of maximum 1 day of work, that is, **8** hours.
+
+For a better visual interpretation of the distribution of values of the variables, we plot their barplots.
+```{r, fig.width = 10, fig.height = 13, fig.align="center"}
+
+r <- ggplot(dat, aes(x = Reason.for.absence)) + 
+  geom_bar() + labs(x = "Reason for Absence")
+m <- ggplot(dat, aes(x = factor(Month.of.absence, labels = labels_Months))) + 
+  geom_bar() + labs(x = "Month of Absence") +
+  theme(axis.text.x = element_text(size = 9, angle = 90))
+d <- ggplot(dat, aes(x = factor(Day.of.the.week, labels = labels_DayW))) + 
+  geom_bar() + labs(x = "Day of the Week") + 
+  theme(axis.text.x = element_text(size = 8, angle = 45))
+s <- ggplot(dat, aes(x = factor(Seasons, labels = labels_Seasons))) + 
+  geom_bar() + labs(x = "Seasons") + 
+  theme(axis.text.x = element_text(size = 9))
+t <- ggplot(dat, aes(x = Transportation.expense)) + 
+  geom_bar() + labs(x = "Transportation Expense")
+di <- ggplot(dat, aes(x = Distance.from.Residence.to.Work)) + 
+  geom_bar() + labs(x = "Distance from Residence")
+se <- ggplot(dat, aes(x = Service.time)) + 
+  geom_bar() + labs(x = "Service Time")
+a <- ggplot(dat, aes(x = Age)) + 
+  geom_bar() + labs(x = "Age")
+w <- ggplot(dat, aes(x = Work.load.Average.day)) + 
+  geom_bar() + labs(x = "Work Load Average Day")
+h <- ggplot(dat, aes(x = Hit.target)) + 
+  geom_bar() + labs(x = "Hit Target")
+e <- ggplot(dat, aes(x = factor(Education, labels = labels_Educ))) + 
+  geom_bar() + labs(x = "Education") + 
+  theme(axis.text.x = element_text(size = 8, angle = 45))
+so <- ggplot(dat, aes(x = Son)) + 
+  geom_bar() + labs(x = "Son")
+sd <- ggplot(dat, aes(x = factor(Social.drinker, labels = c("0", "1")))) + 
+  geom_bar() + labs(x = "Social Drinker")
+p <- ggplot(dat, aes(x = Pet)) + 
+  geom_bar() + labs(x = "Pet")
+w <- ggplot(dat, aes(x = Weight)) + 
+  geom_bar() + labs(x = "Weight")
+h <- ggplot(dat, aes(x = Height)) + 
+  geom_bar() + labs(x = "Height")
+b <- ggplot(dat, aes(x = Body.mass.index)) + 
+  geom_bar() + labs(x = "Body Mass Index")
+ab <- ggplot(dat, aes(x = Absenteeism.time.in.hours)) + 
+  geom_bar() + labs(x = "Absenteeism Time in Hours")
+
+grid.arrange(r, m, d, s, t, di, se, a, w, h, e, so, sd, p, w, h, b, ab, 
+             nrow = 6, ncol = 3)
+
+```
+We note that the attributes *Month.of.absence*, *Day.of.the.week*, *Seasons* and *Social.drinker* are more evenly distributed than the rest.
+
+
+<!-- The attribute disciplinary failure is taken into consideration and it was found it had no obvious part on target variable, for example  --- eu removi esta variavel em cima porque é irrelevante-->
+
+
+Total of absenteeism time hours in the months of year:
+```{r, fig.align="center"}
+
+freqM <- c()
+for(m in 1:12)
+  freqM <- c(freqM, sum(dat$Absenteeism.time.in.hours[dat$Month.of.absence == m]))
+
+barplot(freqM, names.arg = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"), 
+        main = "Total Absenteeism Time Hours over Months", las = 1, 
+        xlab = "Month", ylab = "Absenteeism time hours")
+
+```
+
+Total of absenteeism time hours in the each day of the week:
+```{r, fig.align="center"}
+barplot(c(sum(dat$Absenteeism.time.in.hours[dat$Day.of.the.week==2]),
+          sum(dat$Absenteeism.time.in.hours[dat$Day.of.the.week==3]), 
+          sum(dat$Absenteeism.time.in.hours[dat$Day.of.the.week==4]),
+          sum(dat$Absenteeism.time.in.hours[dat$Day.of.the.week==5]),
+          sum(dat$Absenteeism.time.in.hours[dat$Day.of.the.week==6])), 
+        names.arg = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"), 
+        main = "Total Absenteeism Time Hours over Day of the Week", las = 0,
+        xlab = "Day of the week", ylab = "Absenteeism time hours")
+```
+
+Total of absenteeism time hours in the seasons:
+```{r, fig.align="center"}
+
+barplot(c(sum(dat$Absenteeism.time.in.hours[dat$Seasons==1]),
+          sum(dat$Absenteeism.time.in.hours[dat$Seasons==2]), 
+          sum(dat$Absenteeism.time.in.hours[dat$Seasons==3]),
+          sum(dat$Absenteeism.time.in.hours[dat$Seasons==4])), 
+        names.arg = c("Summer", "Autumn", "Winter", "Spring"), 
+        main = "Total Absenteeism Time Hours over Seasons",
+        xlab = "Season", ylab = "Absenteeism time hours") 
+
+```
+
+Frequency of absenteeism time of employees with at least 1 child:
+```{r, fig.align="center"}
+
+hist(dat$Absenteeism.time.in.hours[dat$Son != 0], breaks = 20,
+     xlab = "Absenteeism time in hours",
+     main = "Frequency of Absenteeism Time of employees with children")
+
+```
+
+Frequency of absenteeism time of employees without children:
+```{r, fig.align="center"}
+
+hist(dat$Absenteeism.time.in.hours[dat$Son == 0], breaks = 20,
+     xlab = "Absenteeism time in hours",
+     main = "Frequency of Absenteeism Time of employees without children")
+
+```
+In both cases, the majority of absences tends to be between **0** and **10** hours, and very small amount was absence more than that.
+One expected assumption is that employees *with* children tend to be absent more often and for longer than employees *without* children, as shown in the above plots.
+The maximum absence time for employees without children is about **60** hours, in contrast to the **120** hours for employees with children.
+
+Here we can also check the frequencies with the particularity of analyzing these frequencies for each quantity of the children of employees.
+```{r, fig.align="center"}
+
+ggplot(data = dat, aes(x = Absenteeism.time.in.hours)) +
+  geom_histogram(binwidth = 5) +
+  facet_wrap(~Son, labeller = labeller(Son = labels_Son)) +
+  labs(x = "Absenteeism time in hours", y = "Frequency") +
+  ggtitle("Frequency of Absenteeism Time by Number of Sons") +
+  theme(axis.text.x = element_text(angle = 90))
+
+```
+We can thus analyze that most of the employees do not have children or have **1** or **2** children.
+As we have seen, only employees with children are absent more than **60** hours, and since this number of absences is quite low, this characteristic will certainly be related to this absence.
+
+Total of absenteeism time in each day of the week by each seasons of year:
+```{r, fig.align="center"}
+
+ggplot(data = dat, aes(x = Day.of.the.week, y = Absenteeism.time.in.hours)) +
+  geom_bar(stat="identity") +
+  facet_wrap(~Seasons, labeller = labeller(Seasons = labels_Seasons)) +
+  labs(x = "Day of the week", y = "Absenteeism time in hours") +
+  scale_x_discrete(limits=c("", "Monday","Tuesday","Wednesday", "Thursday", "Friday")) +
+  ggtitle("Total of Absenteeism Time in each Day of the Week by Seasons") +
+  theme(axis.text.x = element_text(angle = 90)) 
+
+```
+In spring, summer and autumn, the longest absence time occurred on monday, tuesday and wednesday (start of the week), while in winter this happens on mondays, wednesdays and fridays.
+
+Total of absenteeism time in each day of the week by each month of year:
+```{r, fig.align="center", fig.width = 10}
+
+ggplot(data = dat, aes(x = Day.of.the.week, y = Absenteeism.time.in.hours)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~Month.of.absence, labeller = labeller(Month.of.absence = labels_Months), nrow = 2, ncol = 6) +
+  labs(x = "Day of the week", y = "Absenteeism time in hours") +
+  scale_x_discrete(limits=c("", "Monday","Tuesday","Wednesday", "Thursday", "Friday")) +
+  ggtitle("Total of Absenteeism Time in each Day of the Week by Month") +
+  theme(axis.text.x = element_text(angle = 90))
+
+```
+The months March, April, July, November December are the months with the most hours of absence.
+
+Total of absenteeism time of each reason for absence by each education level of employees:
+```{r, fig.align="center"}
+
+ggplot(data = dat, aes(x = Reason.for.absence, y = Absenteeism.time.in.hours)) +
+  geom_bar(stat="identity") +
+  facet_wrap(~Education, labeller = labeller(Education = labels_Educ)) +
+  labs(x = "Reason for absence", y = "Absenteeism time in hours") +
+  ggtitle("Total of Absenteeism Time of each Reason for Absence by Education")
+
+table(dat$Education)
+dat$Absenteeism.time.in.hours[dat$Education == 4]
+```
+Most of the employees with longer   absence time have *highschool* level and the cause for their most lasting absences are: *pregnancy, childbirth and the puerperium* and *external causes of morbidity and mortality*.
+It makes sense that these are the causes that lead to a greater time of absence given its nature.
+There are only 4 employees with master and doctrate education level, these have been absent for a maximum of 8 hours and for different reasons, they are: *pregnancy, childbirth and the puerperium*, *external causes of morbidity and mortality*, *patient follow-up* and *dental consultation*.
+
+We can easily see that the number of employees who drink is slightly larger (418) than the number of employees who do not drink (319), so the attempted analysis can be taken into consideration, it can be a element that influence the target variable.
+```{r}
+
+table(dat$Social.drinker)
+
+```
+
+It seems that drinking implies a greater amount of hours of absence, especially for employees between the ages of 31 and 43.
+```{r, fig.align="center"}
+
+ggplot(dat, aes(x = Age, y = Absenteeism.time.in.hours, fill = Social.drinker)) + 
+  geom_bar(stat = 'identity', position = position_dodge()) + 
+  ylab("Absenteeism time in hours") +
+  scale_x_continuous(breaks = c(seq(25, 60, 5)), limits = c(25,60)) +
+  ggtitle("Total of Absenteeism Time by Age of Employees")
+
+```
+
+Here we analyze the various types of reasons for the absence attribute.
+```{r, fig.align="center", fig.height = 9, fig.width = 8}
+
+reasonPerc <-  as.data.frame(dat %>% 
+                               group_by(Reason.for.absence) %>%
+                               summarise(count= n(), 
+                                         percent = round(count*100 / nrow(dat), 1)) %>%
+                               arrange(desc(count)))
+
+ggplot(reasonPerc, aes(x = reorder(Reason.for.absence, percent), y = percent, fill = Reason.for.absence)) + 
+  geom_bar(stat = 'identity', fill="deepskyblue2", colour="black") + 
+  coord_flip() + 
+  theme(legend.position = 'none') +  
+  geom_text(aes(label = percent), vjust = 0.5, hjust = 1.1) + 
+  xlab('Reason for absence') +
+  ylab('Percent') + 
+  labs(title = 'Percentage of Reason for Absence') + 
+  scale_x_discrete(labels = as.character(labels_Reasons[c(as.character(sort(reorder(reasonPerc$Reason.for.absence, reasonPerc$percent))))]))
+
+```
+The top four of them cover 52.3% of the resons for absence, that is, *medical consultation*, *dental consultation*, *physiotherapy* and *diseases of the genitourinary system*.
+The *unjustified absence* amounts to 4.5% of total resons.
+
+The six reason for absence with more absenteeism time:
+```{r, fig.align="center", fig.height = 8}
+
+reason <- group_by(dat, Reason.for.absence) %>% summarise(num = sum(Absenteeism.time.in.hours))
+most <- head(arrange(reason, desc(num)))
+par(mar=c(13, 4, 4, 2)) 
+barplot(most$num, names.arg = labels_Reasons[c(as.character(most$Reason.for.absence))], 
+        main="Reasons with most Absenteeism Time",
+        ylab = "Absenteeism time in hours", las = 2, cex.names = 0.8)
+
+```
+We can see that the six reason for absence with more absenteeism time are: *diseases of the genitourinary system*, *external causes of morbidity and mortality*, *medical consultation*, *dental consultation*, *diseases of the skin and subcutaneous tissu* and *patient follow-up*.
+
+And the reason for absence with less absenteeism time:
+```{r, fig.align="center", fig.height = 8}
+
+least <- head(arrange(reason, num))
+par(mar=c(15, 4, 4, 2)) 
+barplot(least$num, names.arg = labels_Reasons[c(as.character(least$Reason.for.absence))], 
+        main="Reasons with least Absenteeism Time", 
+        ylab = "Absenteeism time in hours", las = 2, cex.names = 0.8)
+
+```
+We can see that the six reason for absence with less absenteeism time are: *certain infectious and parasitic diseases*, *congenital malformations, deformations and chromosomal abnormalities*, *endocrine, nutritional and metabolic diseases*, *symptoms, signs and abnormal clinical and laboratory findings, not elsewhere classified*, *mental and behavioural disorders* and *certain conditions originating in the perinatal period*.
+
+
+Now let's look at the **correlation** between all variables.
+```{r, fig.align="center"}
+
+corrplot(cor(dat[2:ncol(dat)]), type = "lower", order = "hclust")
+
+```
+
+The most correlated attributes (positive correlation) are:
+
+* the *Weight* with the *Body.mass.index*:
+```{r, fig.align="center"}
+
+ggplot(dat, aes(x = Body.mass.index, y = Weight)) + 
+  geom_point() + 
+  geom_smooth(method = 'lm') + 
+  labs(title = 'Correlation between Weight and Body Mass Index', 
+       x = 'Body mass index', y = 'Weight')
+
+```
+
+* and the *Age* with the *Service.time*:
+```{r, fig.align="center"}
+
+ggplot(dat, aes(x = Age, y = Service.time)) + 
+  geom_point() + 
+  geom_smooth(method = 'lm') + 
+  labs(title = 'Correlation between Service Time and Age', 
+       x = 'Age', y = 'Service time')
+
+```
+
+Another example of attributes that we might think at the outset to be positively correlated are:
+
+* *Absenteeism.time.in.hours* and *Distance.from.Residence.to.Work*: in this plot we can confirm that the distance was not a problem related to the longer absences. In fact these variables are negatively correlated.
+```{r, fig.align="center"}
+
+ggplot(dat, aes(x = Distance.from.Residence.to.Work, y = Absenteeism.time.in.hours)) + 
+  geom_point() + 
+  geom_smooth(method = 'lm') + 
+  labs(title = 'Correlation between Distance from Residence to Work and Absenteeism Time', 
+       x = 'Distance from residence', y = 'Absenteeism time in hours')
+
+```
+
+* *Absenteeism.time.in.hours* and *Transportation.expenses*: the plot also shows that the transport are not a relevant factor for absenteeism time. But are these variables are already positively correlated, unlike the previous ones.
+```{r, fig.align="center"}
+
+ggplot(dat, aes(x = Transportation.expense, y = Absenteeism.time.in.hours)) + 
+  geom_point() + 
+  geom_smooth(method = 'lm') + 
+  labs(title = 'Correlation between Transportation Expenses and Absenteeism Time',
+       x = 'Transportation expense', y = 'Absenteeism time in hours')
+
+```
+
+
+#Predictive analysis
+
+We will try to obtain, using the available data, an approximation of the unknown function $(f)$ that maps the observation descriptors into the intended conclusion, i.e. $Prediction = f(Descriptors)$.
+The approximation of this unknown function is obtained based on examples where we know both the values of the descriptor variables and the values of the target variable- known as a training set.
+
+Using the previous data set we will try a few prediction models and draw some conclusions from this comparison.
+Initially we will perform a predictive analysis taking into account the problem as a regression problem and later as a classification problem.
+In both cases we will randomly split the available data in two sets: a part for **training** and another (separate set) for **testing**. Then, we created the model with the training set and tested it on the testing set.
+
+Our task is to get the best possible model, based on:
+
+* the given data set;
+* a certain preference criterion that allows comparing the different models.
+
+
+##Regression task
+
+We take the all variables, except *ID* and *Absenteeism.time.in.hours*, as descriptors, and we take as target variable the variable *Absenteeism.time.in.hours*, since this variable is numerical we are faced with a regression problem.
+
+To evaluate the predictions using the different models, we chose to calculate the following errors: **MAE** (mean absolute error) and **RMSE** (root mean squared error). 
+
+
+First, we will split data in train and test data (using holdout method).
+```{r}
+
+atrib <- c(2:ncol(dat)) # select the attributes (we will not use the ID's)
+datR <- dat[, atrib]
+
+# Holdout method
+split_dat <- holdout(datR$Absenteeism.time.in.hours, ratio = 0.7, seed = 2811)
+target_trueValue <- datR[split_dat$ts, ]$Absenteeism.time.in.hours
+
+```
+
+We will test the following regression models.
+```{r}
+
+models <- c("ctree", "rpart", "svm", "mlp", "randomForest", "xgboost", "cubist", "lm", "mars")
+
+```
+
+Using the *fit* function of **rminer** package:
+```{r, fig.height = 13, fig.align="center"}
+
+list_RegModels <- list()
+
+## whith fit function:
+for (m in models) {
+  mod <- fit(Absenteeism.time.in.hours ~ ., datR[split_dat$tr, ],
+           model = m, task = "reg")
+  pred <- predict(mod, datR[split_dat$ts, ])
+  err <- mmetric(target_trueValue, pred, metric = c("MAE", "RMSE"))
+  
+  list_RegModels[[m]] <- list()
+  list_RegModels[[m]][[1]] <- mod
+  list_RegModels[[m]][[2]] <- pred
+  list_RegModels[[m]][[3]] <- err
+
+}
+
+```
+
+```{r, fig.height = 9, fig.align="center"}
+
+# decision tree of rpart
+plot(list_RegModels[[2]][[1]]@object,uniform=TRUE,branch=0,compress=FALSE)
+text(list_RegModels[[2]][[1]]@object,xpd=TRUE,fancy=TRUE,fwidth=0.2,fheight=0.2)
+
+```
+
+
+Print of calculated errors:
+```{r}
+
+mae <- c()
+rmse <- c()
+
+for(i in 1:length(models)){
+  mae <- c(mae, round(as.numeric(list_RegModels[[i]][[3]][1]), 2))
+  rmse <- c(rmse, round(as.numeric(list_RegModels[[i]][[3]][2]), 2))
+}
+
+L <- data.frame("MAE" = mae, 
+                "RMSE" = rmse)
+row.names(L) <- models
+
+print(L)
+
+```
+
+The best method for different metrics is not the same for each one. For MAE the best method is *cubist* and for RMSE is *rpart*.
+```{r}
+
+# best results
+L[L$MAE == min(L$MAE),]
+L[L$RMSE == min(L$RMSE),]
+
+```
+
+
+Using the *mining* function of **rminer** package, with method *kfold*, more specifically, 10-fold cross-validation method:
+```{r}
+
+list_RegModMining <- list()
+
+## whith mining function (10-fold):
+for (m in models) {
+  mod <- mining(Absenteeism.time.in.hours ~ ., datR, 
+                model = m, method = c("kfold", 10, 2811),
+                Runs = 20)
+  err <- mmetric(mod, metric = c("MAE", "RMSE"))
+  
+  list_RegModMining[[m]] <- list()
+  list_RegModMining[[m]][[1]] <- mod
+  list_RegModMining[[m]][[2]] <- err
+  
+}
+
+```
+
+Print of calculated errors:
+```{r}
+
+mae <- c()
+rmse <- c()
+
+for(i in 1:length(models)){
+  mae <- c(mae, round(mean(list_RegModMining[[i]][[2]][,1]), 2))
+  rmse <- c(rmse, round(mean(list_RegModMining[[i]][[2]][,2]), 2))
+}
+
+L_kfe <- data.frame("MAE" = mae, 
+                "RMSE" = rmse)
+row.names(L_kfe) <- models
+
+print(L_kfe)
+
+```
+The best method for different metrics is not the same for each one. For MAE the best method is *cubist* and for RMSE is *randomForest*.
+```{r}
+
+# best results
+L_kfe[L_kfe$MAE == min(L_kfe$MAE),]
+L_kfe[L_kfe$RMSE == min(L_kfe$RMSE),]
+
+```
+
+We will use the **REC curve** to compare the different trained models. The REC curve plots the error tolerance on the $x$-axis and the percentage of predicted points within the tolerance on the $y$-axis. The resulting curve estimates the cumulative distribution function of the error. The best model is situated closest to the upper left corner, the faster the curve approaches that point, the better the model. 
+```{r, fig.align="center", fig.width = 9, fig.height = 7}
+
+L_kf <- vector("list", 9) # list of minings
+
+for(i in 1:length(models))
+  L_kf[[i]] <- list_RegModMining[[i]][[1]]
+
+mgraph(L_kf, graph = "REC", 
+       leg = list(pos = c(14, 0.5),
+                  leg = c("ctree", "rpart", "svm", "mlp", "randomForest", "xgboost", "cubist", "lm", "mars")),  
+       col=c("forestgreen", "blue", "red", "saddlebrown", "green", "hotpink", "cyan", "darkmagenta", "orange"),
+       main = "REC curve", xval = 20, Grid = 5)
+
+```
+
+
+
+###Removing some attributes
+
+In order to verify if some attributes, namely, more characteristic attributes of the employee (such as *Education*, *Weight*, *Height* and *Body.mass.index*), influence in the previous results, we decided to remove them and test the models again.
+```{r, fig.height = 13, fig.align="center"}
+
+datR$Education <- NULL
+datR$Weight <- NULL
+datR$Height <- NULL
+datR$Body.mass.index <-NULL
+
+list_RegModels2 <- list()
+
+## whith fit function:
+for (m in models) {
+  mod <- fit(Absenteeism.time.in.hours ~ ., datR[split_dat$tr, ],
+           model = m, task = "reg")
+  pred <- predict(mod, datR[split_dat$ts, ])
+  err <- mmetric(target_trueValue, pred, metric = c("MAE", "RMSE"))
+  
+  list_RegModels2[[m]] <- list()
+  list_RegModels2[[m]][[1]] <- mod
+  list_RegModels2[[m]][[2]] <- pred
+  list_RegModels2[[m]][[3]] <- err
+
+}
+
+mae <- c()
+rmse <- c()
+
+for(i in 1:length(models)){
+  mae <- c(mae, round(as.numeric(list_RegModels2[[i]][[3]][1]), 2))
+  rmse <- c(rmse, round(as.numeric(list_RegModels2[[i]][[3]][2]), 2))
+}
+
+L2 <- data.frame("MAE" = mae, 
+                "RMSE" = rmse)
+row.names(L2) <- models
+
+# best results
+L2[L2$MAE == min(L2$MAE),]
+L2[L2$RMSE == min(L2$RMSE),]
+
+```
+
+```{r, fig.height = 9, fig.align="center"}
+
+# decision tree of rpart
+plot(list_RegModels2[[2]][[1]]@object,uniform=TRUE,branch=0,compress=FALSE)
+text(list_RegModels2[[2]][[1]]@object,xpd=TRUE,fancy=TRUE,fwidth=0.2,fheight=0.2)
+
+```
+The results obtained are quite similar.
+
+
+
+##Classification task
+
+Now we intend to turn our regression problem into a classification problem. The aim is to try to predict whether an employee in certain conditions would be absent for a short or long duration. Since our target variable is in a range between $[0, 120]$, we divide this interval into **5** absence classes:
+
+* *Class 1*: represents absence up to 2 hours of work, that is, **dat\$Absenteeism.time.in.hours <= 2**
+* *Class 2*: represents absence until noon of work (4 hours), that is **dat\$Absenteeism.time.in.hours > 2 & dat\$Absenteeism.time.in.hours <= 4**
+* *Class 3*: represents absence up to 1 day of work (8 hours), that is, **dat\$Absenteeism.time.in.hours > 4 & dat\$Absenteeism.time.in.hours <= 8** 
+* *Class 4*: represents absence up to 1 week of work (40 hours), that is, **dat\$Absenteeism.time.in.hours > 8 & dat\$Absenteeism.time.in.hours <= 40**
+* *Class 5*: represents absence more than 1 week of work, that is, **dat\$Absenteeism.time.in.hours > 40**
+
+```{r}
+
+classes <- c()
+for (i in 1:nrow(dat)) {
+  if(dat[i, ncol(dat)] <= 2)
+    classes <- c(classes, "Class 1")
+  else if(dat[i, ncol(dat)] > 2 & dat[i, ncol(dat)] <= 4)
+    classes <- c(classes, "Class 2")
+  else if(dat[i, ncol(dat)] > 4 & dat[i, ncol(dat)] <= 8)
+    classes <- c(classes, "Class 3")
+  else if(dat[i, ncol(dat)] > 8 & dat[i, ncol(dat)] <= 40)
+    classes <- c(classes, "Class 4")
+  else if(dat[i, ncol(dat)] > 40)
+    classes <- c(classes, "Class 5")
+}
+
+datC <- dat
+datC$Class <- classes
+datC$Class <- as.factor(datC$Class)
+
+```
+
+
+```{r, fig.align="center"}
+
+barplot(table(datC$Class),
+        xlab = "Class", ylab = "count")
+
+```
+We can see that the first three classes are the most frequent, which is predictable. Not so predictable is **Class 3** more frequent than **Class 2**.
+
+
+We take the all variables, except *ID*, *Absenteeism.time.in.hours* and *Class*, as descriptors, and we take as target variable the variable *Class*, since this variable is numerical we are faced with a regression problem.
+
+To evaluate the predictions using the different models, we chose to calculate the following errors: **ACC** (classification accuracy rate) and **PRECISION** (precision). 
+
+First, we again will split data in train and test data (using holdout method).
+```{r}
+
+atrib <- c(2:18, 20)              # select the attributes (we will not use the ID's nor Absenteeism time in hours)
+datC <- datC[, atrib]
+split_dat <- holdout(datC$Class, ratio = 0.7, seed = 2811)
+target_trueValue <- datC[split_dat$ts, ]$Class
+
+```
+
+
+We will test the following classification models.
+```{r}
+
+models <- c("ctree", "rpart", "svm", "mlp", "randomForest", "xgboost", "lda", "naiveBayes")
+
+```
+
+Using the *fit* function of **rminer** package:
+```{r, fig.height = 13, fig.align="center"}
+
+list_ClassModels <- list()
+
+## whith fit function:
+for (m in models) {
+  mod <- fit(Class ~ ., datC[split_dat$tr, ],
+             model = m, task = "class")
+  pred <- predict(mod, datC[split_dat$ts, ])
+  err <- mmetric(target_trueValue, pred, metric = c("ACC", "PRECISION"))
+  
+  list_ClassModels[[m]] <- list()
+  list_ClassModels[[m]][[1]] <- mod
+  list_ClassModels[[m]][[2]] <- pred
+  list_ClassModels[[m]][[3]] <- err
+  
+}
+
+```
+
+```{r, fig.height = 9, fig.align="center"}
+
+# decision tree of rpart model
+plot(list_ClassModels[[2]][[1]]@object,uniform=TRUE,branch=0,compress=FALSE)
+text(list_ClassModels[[2]][[1]]@object,xpd=TRUE,fancy=TRUE,fwidth=0.2,fheight=0.2)
+
+```
+
+```{r, fig.height = 9, fig.width = 10, fig.align="center"}
+
+# conditional inference tree of ctree model
+plot(list_ClassModels[[1]][[1]]@object)
+
+```
+
+Print of calculated errors:
+```{r}
+
+acc <- c()
+precision <- c()
+
+for(i in 1:length(models)){
+  acc <- c(acc, round(as.numeric(list_ClassModels[[i]][[3]][1]), 2))
+  precision <- c(precision, round(as.numeric(list_ClassModels[[i]][[3]][2]), 2))
+}
+
+cL <- data.frame("ACC" = acc, 
+                 "PRECISION" = precision)
+row.names(cL) <- models
+
+print(cL)
+
+```
+The best method for different metrics is not the same for each one. For ACC the best method is *randomForest* and for PRECISION is *randomForest*.
+```{r}
+
+# best results
+cL[cL$ACC == max(cL$ACC),]
+cL[cL$PRECISION == max(cL$PRECISION),]
+
+```
+
+
+Using the *mining* function of **rminer** package, with method *kfold*, more specifically, 10-fold cross-validation method:
+```{r}
+
+list_ClassModMining <- list()
+
+## whith mining function (10-fold):
+for (m in models) {
+  mod <- mining(Class ~ ., datC, 
+                model = m, method = c("kfold", 10, 2811),
+                Runs = 20)
+  err <- mmetric(mod, metric = c("ACC", "PRECISION"))
+  
+  list_ClassModMining[[m]] <- list()
+  list_ClassModMining[[m]][[1]] <- mod
+  list_ClassModMining[[m]][[2]] <- err
+  
+}
+
+```
+
+Print of calculated errors:
+```{r}
+
+acc <- c()
+precision <- c()
+
+for(i in 1:length(models)){
+  acc <- c(acc, round(mean(list_ClassModMining[[i]][[2]][,1]), 2))
+  precision <- c(precision, round(mean(list_ClassModMining[[i]][[2]][,2]), 2))
+}
+
+cL_kfe <- data.frame("ACC" = acc, 
+                "PRECISION" = precision)
+row.names(cL_kfe) <- models
+
+print(cL_kfe)
+
+```
+The best method for different metrics is not the same for each one. For ACC the best method is *xgboost* and for PRECISION is *xgboost*.
+```{r}
+
+# best results
+cL_kfe[cL_kfe$ACC == max(cL_kfe$ACC),]
+cL_kfe[cL_kfe$PRECISION == max(cL_kfe$PRECISION),]
+
+```
+
+The **ROC curve** is a fundamental tool for evaluating tests. The true positive rate (Sensitivity) is plotted against the false positive rate (specificity of 100) for different cut-off points of a parameter. Each point in the ROC curve represents a sensitivity/specificity pair corresponding to a given decision threshold. The area under the ROC curve is a measure of how well a parameter can distinguish between models.
+
+```{r, fig.align="center", fig.width = 9, fig.height = 7}
+
+cL_kf <- vector("list", 8) # list of minings
+
+for(i in 1:length(models))
+  cL_kf[[i]] <- list_ClassModMining[[i]][[1]]
+
+mgraph(cL_kf, graph = "ROC", 
+     leg = list(pos = c(12, 0.4),
+                leg = c("ctree", "rpart", "svm", "mlp", "randomForest", "xgboost", "lda", "naiveBayes")),
+     col=c("forestgreen", "blue", "red", "saddlebrown", "green", "hotpink", "cyan", "darkmagenta"),
+     main = "ROC curve", xval = 20, Grid = 5)
+
+```
+
+
+###Removing some attributes
+
+Also here we carry out the test of removing the most characteristic attributes of the employees.
+```{r, fig.height = 13, fig.align="center"}
+
+datC$Education <- NULL
+datC$Weight <- NULL
+datC$Height <- NULL
+datC$Body.mass.index <- NULL
+
+list_ClassModels2 <- list()
+
+## whith fit function:
+for (m in models) {
+  mod <- fit(Class ~ ., datC[split_dat$tr, ],
+             model = m, task = "class")
+  pred <- predict(mod, datC[split_dat$ts, ])
+  err <- mmetric(target_trueValue, pred, metric = c("ACC", "PRECISION"))
+  
+  list_ClassModels2[[m]] <- list()
+  list_ClassModels2[[m]][[1]] <- mod
+  list_ClassModels2[[m]][[2]] <- pred
+  list_ClassModels2[[m]][[3]] <- err
+  
+}
+
+acc <- c()
+precision <- c()
+
+for(i in 1:length(models)){
+  acc <- c(acc, round(as.numeric(list_ClassModels2[[i]][[3]][1]), 2))
+  precision <- c(precision, round(as.numeric(list_ClassModels2[[i]][[3]][2]), 2))
+}
+
+cL2 <- data.frame("ACC" = acc, 
+                 "PRECISION" = precision)
+row.names(cL2) <- models
+
+# best results
+cL2[cL2$ACC == max(cL2$ACC),]
+cL2[cL2$PRECISION == max(cL2$PRECISION),]
+
+```
+
+
+```{r, fig.height = 9, fig.align="center"}
+
+# decision tree of rpart
+plot(list_ClassModels2[[2]][[1]]@object,uniform=TRUE,branch=0,compress=FALSE)
+text(list_ClassModels2[[2]][[1]]@object,xpd=TRUE,fancy=TRUE,fwidth=0.2,fheight=0.2)
+
+
+```
+
+```{r, fig.height = 9, fig.width = 10, fig.align="center"}
+
+# conditional inference tree of ctree model
+plot(list_ClassModels2[[1]][[1]]@object)
+
+
+```
+
+And here too the results obtained are quite similar.
